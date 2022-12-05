@@ -12,12 +12,12 @@ import org.webrtc.RtpReceiver;
  * Created by chao on 2019/1/28.
  */
 
-public class PeerConnectionAdapter implements PeerConnection.Observer {
+public class PeerConnectionObserver implements PeerConnection.Observer {
 
     private String tag;
 
-    public PeerConnectionAdapter(String tag) {
-        this.tag = "chao " + tag;
+    public PeerConnectionObserver(String tag) {
+        this.tag = tag;
     }
 
     private void log(String s) {

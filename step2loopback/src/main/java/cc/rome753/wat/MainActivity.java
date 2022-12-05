@@ -25,9 +25,9 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
-    PeerConnectionFactory peerConnectionFactory;
-    PeerConnection peerConnectionLocal;
-    PeerConnection peerConnectionRemote;
+    PeerConnectionFactory peerConnFact;
+    PeerConnection peerConnLocal;
+    PeerConnection peerConnRemote;
     SurfaceViewRenderer localView;
     SurfaceViewRenderer remoteView;
     MediaStream mediaStreamLocal;
@@ -48,16 +48,16 @@ public class MainActivity extends AppCompatActivity {
                 new DefaultVideoEncoderFactory(eglBaseContext, true, true);
         DefaultVideoDecoderFactory defaultVideoDecoderFactory =
                 new DefaultVideoDecoderFactory(eglBaseContext);
-        peerConnectionFactory = PeerConnectionFactory.builder()
+        peerConnFact = PeerConnectionFactory.builder()
                 .setOptions(options)
                 .setVideoEncoderFactory(defaultVideoEncoderFactory)
                 .setVideoDecoderFactory(defaultVideoDecoderFactory)
                 .createPeerConnectionFactory();
 
+        // create Front VideoCapturer
         SurfaceTextureHelper surfaceTextureHelper = SurfaceTextureHelper.create("CaptureThread", eglBaseContext);
-        // create VideoCapturer
         VideoCapturer videoCapturer = createCameraCapturer(true);
-        VideoSource videoSource = peerConnectionFactory.createVideoSource(videoCapturer.isScreencast());
+        VideoSource videoSource = peerConnFact.createVideoSource(videoCapturer.isScreencast());
         videoCapturer.initialize(surfaceTextureHelper, getApplicationContext(), videoSource.getCapturerObserver());
         videoCapturer.startCapture(480, 640, 30);
 
@@ -65,18 +65,13 @@ public class MainActivity extends AppCompatActivity {
         localView.setMirror(true);
         localView.init(eglBaseContext, null);
 
-        // create VideoTrack
-        VideoTrack videoTrack = peerConnectionFactory.createVideoTrack("100", videoSource);
-//        // display in localView
+        VideoTrack videoTrack = peerConnFact.createVideoTrack("100", videoSource);
 //        videoTrack.addSink(localView);
 
-
-
-
+        // create Backed VideoCapturer
         SurfaceTextureHelper remoteSurfaceTextureHelper = SurfaceTextureHelper.create("RemoteCaptureThread", eglBaseContext);
-        // create VideoCapturer
         VideoCapturer remoteVideoCapturer = createCameraCapturer(false);
-        VideoSource remoteVideoSource = peerConnectionFactory.createVideoSource(remoteVideoCapturer.isScreencast());
+        VideoSource remoteVideoSource = peerConnFact.createVideoSource(remoteVideoCapturer.isScreencast());
         remoteVideoCapturer.initialize(remoteSurfaceTextureHelper, getApplicationContext(), remoteVideoSource.getCapturerObserver());
         remoteVideoCapturer.startCapture(480, 640, 30);
 
@@ -84,17 +79,13 @@ public class MainActivity extends AppCompatActivity {
         remoteView.setMirror(false);
         remoteView.init(eglBaseContext, null);
 
-        // create VideoTrack
-        VideoTrack remoteVideoTrack = peerConnectionFactory.createVideoTrack("102", remoteVideoSource);
-//        // display in remoteView
+        VideoTrack remoteVideoTrack = peerConnFact.createVideoTrack("102", remoteVideoSource);
 //        remoteVideoTrack.addSink(remoteView);
 
-
-
-        mediaStreamLocal = peerConnectionFactory.createLocalMediaStream("mediaStreamLocal");
+        mediaStreamLocal = peerConnFact.createLocalMediaStream("mediaStreamLocal");
         mediaStreamLocal.addTrack(videoTrack);
 
-        mediaStreamRemote = peerConnectionFactory.createLocalMediaStream("mediaStreamRemote");
+        mediaStreamRemote = peerConnFact.createLocalMediaStream("mediaStreamRemote");
         mediaStreamRemote.addTrack(remoteVideoTrack);
 
         call(mediaStreamLocal, mediaStreamRemote);
@@ -103,11 +94,11 @@ public class MainActivity extends AppCompatActivity {
 
     private void call(MediaStream localMediaStream, MediaStream remoteMediaStream) {
         List<PeerConnection.IceServer> iceServers = new ArrayList<>();
-        peerConnectionLocal = peerConnectionFactory.createPeerConnection(iceServers, new PeerConnectionAdapter("localconnection") {
+        peerConnLocal = peerConnFact.createPeerConnection(iceServers, new PeerConnectionObserver("PeerConnLocal") {
             @Override
             public void onIceCandidate(IceCandidate iceCandidate) {
                 super.onIceCandidate(iceCandidate);
-                peerConnectionRemote.addIceCandidate(iceCandidate);
+                peerConnRemote.addIceCandidate(iceCandidate);
             }
 
             @Override
@@ -120,11 +111,11 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        peerConnectionRemote = peerConnectionFactory.createPeerConnection(iceServers, new PeerConnectionAdapter("remoteconnection") {
+        peerConnRemote = peerConnFact.createPeerConnection(iceServers, new PeerConnectionObserver("PeerConnRemote") {
             @Override
             public void onIceCandidate(IceCandidate iceCandidate) {
                 super.onIceCandidate(iceCandidate);
-                peerConnectionLocal.addIceCandidate(iceCandidate);
+                peerConnLocal.addIceCandidate(iceCandidate);
             }
 
             @Override
@@ -137,21 +128,21 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        peerConnectionLocal.addStream(localMediaStream);
-        peerConnectionLocal.createOffer(new SdpAdapter("local offer sdp") {
+        peerConnLocal.addStream(localMediaStream);
+        peerConnLocal.createOffer(new SDPObserver("Local-createOffer") {
             @Override
-            public void onCreateSuccess(SessionDescription sessionDescription) {
-                super.onCreateSuccess(sessionDescription);
+            public void onCreateSuccess(SessionDescription localSDP) {
+                super.onCreateSuccess(localSDP);
                 // todo crashed here
-                peerConnectionLocal.setLocalDescription(new SdpAdapter("local set local"), sessionDescription);
-                peerConnectionRemote.addStream(remoteMediaStream);
-                peerConnectionRemote.setRemoteDescription(new SdpAdapter("remote set remote"), sessionDescription);
-                peerConnectionRemote.createAnswer(new SdpAdapter("remote answer sdp") {
+                peerConnLocal.setLocalDescription(new SDPObserver("Local-setLocalDesc"), localSDP);
+                peerConnRemote.addStream(remoteMediaStream);
+                peerConnRemote.setRemoteDescription(new SDPObserver("Remote-setRemoteDesc"), localSDP);
+                peerConnRemote.createAnswer(new SDPObserver("Remote-createAnswer") {
                     @Override
-                    public void onCreateSuccess(SessionDescription sdp) {
-                        super.onCreateSuccess(sdp);
-                        peerConnectionRemote.setLocalDescription(new SdpAdapter("remote set local"), sdp);
-                        peerConnectionLocal.setRemoteDescription(new SdpAdapter("local set remote"), sdp);
+                    public void onCreateSuccess(SessionDescription remoteSDP) {
+                        super.onCreateSuccess(remoteSDP);
+                        peerConnRemote.setLocalDescription(new SDPObserver("Remote-setLocalDesc"), remoteSDP);
+                        peerConnLocal.setRemoteDescription(new SDPObserver("Local-setRemoteDesc"), remoteSDP);
                     }
                 }, new MediaConstraints());
             }
@@ -166,13 +157,11 @@ public class MainActivity extends AppCompatActivity {
         for (String deviceName : deviceNames) {
             if (isFront ? enumerator.isFrontFacing(deviceName) : enumerator.isBackFacing(deviceName)) {
                 VideoCapturer videoCapturer = enumerator.createCapturer(deviceName, null);
-
                 if (videoCapturer != null) {
                     return videoCapturer;
                 }
             }
         }
-
         return null;
     }
 

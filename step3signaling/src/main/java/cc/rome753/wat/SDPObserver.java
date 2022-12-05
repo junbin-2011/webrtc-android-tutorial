@@ -9,13 +9,13 @@ import org.webrtc.SessionDescription;
  * Created by chao on 2019/1/29.
  */
 
-public class SdpAdapter implements SdpObserver {
+public class SDPObserver implements SdpObserver {
 
 
     private String tag;
 
-    public SdpAdapter(String tag) {
-        this.tag = "chao " + tag;
+    public SDPObserver(String tag) {
+        this.tag = tag;
     }
 
     private void log(String s) {

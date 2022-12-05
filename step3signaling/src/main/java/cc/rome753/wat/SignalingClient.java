@@ -1,6 +1,5 @@
 package cc.rome753.wat;
 
-import android.telecom.Call;
 import android.util.Log;
 
 import org.json.JSONException;
@@ -28,14 +27,13 @@ import io.socket.client.Socket;
 
 public class SignalingClient {
 
+    private static final String TAG = MainActivity.TAG + "-" + SignalingClient.class.getSimpleName();
     private static SignalingClient instance;
-    private SignalingClient(){
-        init();
-    }
+
     public static SignalingClient get() {
-        if(instance == null) {
+        if (instance == null) {
             synchronized (SignalingClient.class) {
-                if(instance == null) {
+                if (instance == null) {
                     instance = new SignalingClient();
                 }
             }
@@ -43,85 +41,91 @@ public class SignalingClient {
         return instance;
     }
 
-    private Socket socket;
-    private String room = "OldPlace";
-    private Callback callback;
 
-    private final TrustManager[] trustAll = new TrustManager[]{
-            new X509TrustManager() {
-                @Override
-                public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+    private Socket mSocket;
+    private String mRoom = "OldPlace";
+    private Callback mCallback;
 
-                }
+    private final TrustManager[] mTrustAll = new TrustManager[]{new X509TrustManager() {
+        @Override
+        public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+            Log.i(TAG, "TrustManager.checkClientTrusted");
+        }
 
-                @Override
-                public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+        @Override
+        public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+            Log.i(TAG, "TrustManager.checkServerTrusted");
+        }
 
-                }
+        @Override
+        public X509Certificate[] getAcceptedIssuers() {
+            Log.i(TAG, "TrustManager.getAcceptedIssuers");
+            return new X509Certificate[0];
+        }
+    }};
 
-                @Override
-                public X509Certificate[] getAcceptedIssuers() {
-                    return new X509Certificate[0];
-                }
-            }
-    };
+    private SignalingClient() {
+        init();
+    }
 
     public void setCallback(Callback callback) {
-        this.callback = callback;
+        this.mCallback = callback;
     }
 
     private void init() {
         try {
             SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(null, trustAll, null);
+            sslContext.init(null, mTrustAll, null);
             IO.setDefaultHostnameVerifier((hostname, session) -> true);
             IO.setDefaultSSLContext(sslContext);
 
-            socket = IO.socket("https://192.168.1.97:8080");
-            socket.connect();
+            String ipAddr = "https://192.168.0.103:8080";
+            Log.w(TAG, "connect >>> " + ipAddr);
+            mSocket = IO.socket(ipAddr);
+            mSocket.connect();
 
-            socket.emit("create or join", room);
+            Log.w(TAG, "emit>>>create or join");
+            mSocket.emit("create or join", mRoom);
 
-            socket.on("created", args -> {
-                Log.e("chao", "room created");
-                callback.onCreateRoom();
+            mSocket.on("created", args -> {
+                Log.i(TAG, "on【created】");
+                mCallback.onCreateRoom();
             });
-            socket.on("full", args -> {
-                Log.e("chao", "room full");
+            mSocket.on("full", args -> {
+                Log.i(TAG, "on【full】");
             });
-            socket.on("join", args -> {
-                Log.e("chao", "peer joined");
-                callback.onPeerJoined();
+            mSocket.on("join", args -> {
+                Log.i(TAG, "on【join】");
+                mCallback.onPeerJoined();
             });
-            socket.on("joined", args -> {
-                Log.e("chao", "self joined");
-                callback.onSelfJoined();
+            mSocket.on("joined", args -> {
+                Log.i(TAG, "on【joined】");
+                mCallback.onSelfJoined();
             });
-            socket.on("log", args -> {
-                Log.e("chao", "log call " + Arrays.toString(args));
+            mSocket.on("log", args -> {
+                Log.i(TAG, "on【log】, args=" + Arrays.toString(args));
             });
-            socket.on("bye", args -> {
-                Log.e("chao", "bye " + args[0]);
-                callback.onPeerLeave((String) args[0]);
+            mSocket.on("bye", args -> {
+                Log.i(TAG, "on【bye】, args0=" + args[0]);
+                mCallback.onPeerLeave((String) args[0]);
             });
-            socket.on("message", args -> {
-                Log.e("chao", "message " + Arrays.toString(args));
+            mSocket.on("message", args -> {
+                Log.i(TAG, "on【message】, args=" + Arrays.toString(args));
                 Object arg = args[0];
-                if(arg instanceof String) {
+                if (arg instanceof String) {
 
-                } else if(arg instanceof JSONObject) {
+                } else if (arg instanceof JSONObject) {
                     JSONObject data = (JSONObject) arg;
                     String type = data.optString("type");
-                    if("offer".equals(type)) {
-                        callback.onOfferReceived(data);
-                    } else if("answer".equals(type)) {
-                        callback.onAnswerReceived(data);
-                    } else if("candidate".equals(type)) {
-                        callback.onIceCandidateReceived(data);
+                    if ("offer".equals(type)) {
+                        mCallback.onOfferReceived(data);
+                    } else if ("answer".equals(type)) {
+                        mCallback.onAnswerReceived(data);
+                    } else if ("candidate".equals(type)) {
+                        mCallback.onIceCandidateReceived(data);
                     }
                 }
             });
-
         } catch (NoSuchAlgorithmException e) {
             e.printStackTrace();
         } catch (KeyManagementException e) {
@@ -138,8 +142,8 @@ public class SignalingClient {
             jo.put("label", iceCandidate.sdpMLineIndex);
             jo.put("id", iceCandidate.sdpMid);
             jo.put("candidate", iceCandidate.sdp);
-
-            socket.emit("message", jo);
+            Log.w(TAG, "emit>>>message[IceCandidate], args=" + jo);
+            mSocket.emit("message", jo);
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -150,21 +154,27 @@ public class SignalingClient {
         try {
             jo.put("type", sdp.type.canonicalForm());
             jo.put("sdp", sdp.description);
-
-            socket.emit("message", jo);
+            Log.w(TAG, "emit>>>message[SDP], args=" + jo);
+            mSocket.emit("message", jo);
         } catch (JSONException e) {
             e.printStackTrace();
         }
     }
 
     public interface Callback {
+
         void onCreateRoom();
+
         void onPeerJoined();
+
         void onSelfJoined();
+
         void onPeerLeave(String msg);
 
         void onOfferReceived(JSONObject data);
+
         void onAnswerReceived(JSONObject data);
+
         void onIceCandidateReceived(JSONObject data);
     }
 

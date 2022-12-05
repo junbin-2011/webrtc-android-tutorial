@@ -6,8 +6,8 @@ var https = require('https');
 var socketIO = require('socket.io');
 var fs = require('fs');
 var options = {
-  key: fs.readFileSync('key.pem'),
-  cert: fs.readFileSync('cert.pem')
+  key: fs.readFileSync('cert/rsa_pri_key.pem'),
+  cert: fs.readFileSync('cert/cert.pem')
 };
 
 var fileServer = new(nodeStatic.Server)();
