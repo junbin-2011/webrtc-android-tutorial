@@ -63,24 +63,24 @@ public class MainActivity extends AppCompatActivity implements SignalingClient.C
      */
     private void checkPermissions() {
         List<String> neededPermissions = new ArrayList<>();
-        if (!checkPermission(Manifest.permission.CAMERA)) {
+        if (!checkSelfPermissionGranted(Manifest.permission.CAMERA)) {
             neededPermissions.add(Manifest.permission.CAMERA);
         }
-        if (!checkPermission(Manifest.permission.RECORD_AUDIO)) {
+        if (!checkSelfPermissionGranted(Manifest.permission.RECORD_AUDIO)) {
             neededPermissions.add(Manifest.permission.RECORD_AUDIO);
         }
-        if (!checkPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+        if (!checkSelfPermissionGranted(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
             neededPermissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
         }
         if (!neededPermissions.isEmpty()) {
-            String[] permissionArray = neededPermissions.toArray(new String[neededPermissions.size()]);
-            ActivityCompat.requestPermissions(this, permissionArray, CODE_PERMISSION);
+            String[] permissions = neededPermissions.toArray(new String[neededPermissions.size()]);
+            ActivityCompat.requestPermissions(this, permissions, CODE_PERMISSION);
         } else {
             requestCapScreen();
         }
     }
 
-    private boolean checkPermission(String permission) {
+    private boolean checkSelfPermissionGranted(String permission) {
         return ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED;
     }
 
@@ -151,7 +151,12 @@ public class MainActivity extends AppCompatActivity implements SignalingClient.C
         // create VideoSource with front VideoCapturer
         Log.i(TAG, "create VideoSource with ScreenCapture");
         SurfaceTextureHelper helper = SurfaceTextureHelper.create("CaptureThread", eglBaseContext);
-        VideoCapturer screenCapturer = createScreenCapture();
+        VideoCapturer screenCapturer = new ScreenCapturerAndroid(mScreenCaptInt, new MediaProjection.Callback() {
+            @Override
+            public void onStop() {
+                super.onStop();
+            }
+        });;
         VideoSource videoSource = mPeerConnFact.createVideoSource(screenCapturer.isScreencast());
         screenCapturer.initialize(helper, getApplicationContext(), videoSource.getCapturerObserver());
         screenCapturer.startCapture(480, 640, 30);
@@ -211,31 +216,6 @@ public class MainActivity extends AppCompatActivity implements SignalingClient.C
                 });
         Log.i(TAG, "PeerConnection add local media stream");
         mPeerConn.addStream(mMediaStream);
-    }
-
-    private VideoCapturer createCameraCapturer(boolean isFront) {
-        Camera1Enumerator enumerator = new Camera1Enumerator(false);
-        final String[] deviceNames = enumerator.getDeviceNames();
-        // First, try to find front facing camera
-        for (String deviceName : deviceNames) {
-            if (isFront ? enumerator.isFrontFacing(deviceName) : enumerator.isBackFacing(deviceName)) {
-                VideoCapturer videoCapturer = enumerator.createCapturer(deviceName, null);
-                if (videoCapturer != null) {
-                    return videoCapturer;
-                }
-            }
-        }
-        return null;
-    }
-
-    private VideoCapturer createScreenCapture() {
-        VideoCapturer videoCapturer = new ScreenCapturerAndroid(mScreenCaptInt, new MediaProjection.Callback() {
-            @Override
-            public void onStop() {
-                super.onStop();
-            }
-        });
-        return videoCapturer;
     }
 
     @Override
